@@ -23,6 +23,9 @@ function Extension() {
   const cartLines = useCartLines();
   const [firstProductId, setFirstProductId] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  let timerEnd;
+  const [intervalInstance, setIntervalInstance] = useState(null);
+  const [timerText, setTimerText] = useState(null);
   const language = useLanguage();
   const metaSettings = {
     exclude_ordered_products: "on",
@@ -46,7 +49,7 @@ function Extension() {
     variants__hide_variants: "on",
     product_type__hide_pt: null,
     vendor__hide_vendor: null,
-    countdown_enabled: null,
+    countdown_enabled: true,
     cd_text: "Offer expires in:",
     cd_position: "top",
     cd_style: "1",
@@ -65,6 +68,33 @@ function Extension() {
     cd_expired_action: "1",
     product_ids: "",
   };
+
+  const twoDigits = (value) => {
+    return value > 9 ? `${ value }` : `0${value}`;
+  }
+
+  const intervalHandler = () => {
+    const now = new Date();
+    const remainingTime = timerEnd.getTime() - now.getTime();
+    if(remainingTime > 0) {
+      const days = parseInt(remainingTime / 86400000);
+      const hours = parseInt((remainingTime % 86400000) / 3600000);
+      const minutes = parseInt((remainingTime % 3600000) / 60000);    
+      const seconds = parseInt((remainingTime % 60000) / 1000);    
+      setTimerText(`${ metaSettings.cd_text }${ days ? ` ${ days } ${ metaSettings.cd_days_text }`: ''}${ hours ? ` ${ twoDigits(hours) } ${ metaSettings.cd_hours_text }`: ''}${ minutes ? ` ${ twoDigits(minutes) } ${ metaSettings.cd_minutes_text }`: ''}${ seconds ? ` ${ twoDigits(seconds) } ${ metaSettings.cd_seconds_text }`: ''}`)
+    } else {
+      clearInterval(intervalInstance);
+      setTimerText(metaSettings.cd_expired_text);
+    }
+  }
+
+  useEffect(() => {
+    const now = new Date();
+    const targetTime = new Date(now.getTime() + parseInt(metaSettings.cd_days) * 86400000 + parseInt(metaSettings.cd_hours)  * 3600000 + parseInt(metaSettings.cd_minutes) * 60000 + parseInt(metaSettings.cd_seconds) * 1000);
+    timerEnd = targetTime;
+    const interval = setInterval(intervalHandler, 500);
+    setIntervalInstance(interval);
+  }, [])
 
   useEffect(() => {
     console.log(localization);
@@ -141,25 +171,34 @@ function Extension() {
 
   return relatedProducts.length ? (
     <BlockStack inlineAlignment="center" spacing="loose" padding={["loose", "none"]}>
+      { metaSettings.countdown_enabled && metaSettings.cd_position === 'top' ? <Text size="medium">{ timerText }</Text> : null}
       <Text size="medium">{ metaSettings.free_text? metaSettings.free_text.replace(/(<([^>]+)>)/gi, "") : "" }</Text>
+      { metaSettings.countdown_enabled && metaSettings.cd_position === 'below_text' ? <Text size="medium">{ timerText }</Text> : null}
       <InlineLayout columns="3" spacing="base">
         {relatedProducts.map((product, index) => (
           <BlockStack spacing="base" key={index}>
             <Image source={product.featured_image} />
             <Text size="large" appearance="accent">{product.title}</Text>
             <Text>{formatMoney(product.variants[product.selectedVariant].price)}</Text>
-            <Select
-              label="Variant"
-              value={product.variants[product.selectedVariant].id}
-              options={product.variants.map((variant) => {
-                return {
-                  value: variant.id,
-                  label: variant.title,
-                };
-              })}
-              onChange={(value) => handleVariantChange(value, index)}
-            />
-            <Stepper label="Quantity" value={1} />
+            {
+              metaSettings.variants__hide_variants === "on" ? null: (
+                <Select
+                  label="Variant"
+                  value={product.variants[product.selectedVariant].id}
+                  options={product.variants.map((variant) => {
+                    return {
+                      value: variant.id,
+                      label: variant.title,
+                    };
+                  })}
+                  onChange={(value) => handleVariantChange(value, index)}
+                />
+              )
+            }
+            
+            {
+              metaSettings.quantity_picker__hide_qty === "on" ? null: <Stepper label="Quantity" value={1} />
+            }
 
             <Button
               onPress={() => {
@@ -172,6 +211,7 @@ function Extension() {
           </BlockStack>
         ))}
       </InlineLayout>
+      { metaSettings.countdown_enabled && metaSettings.cd_position === 'bottom' ? <Text size="medium">{ timerText }</Text> : null}
     </BlockStack>
     
   ) : (
